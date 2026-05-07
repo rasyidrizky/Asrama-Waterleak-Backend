@@ -128,7 +128,7 @@ app.get('/api/web/executive/summary', authenticateAndAuthorize('Pengelola'), asy
 // ============================================================================
 
 // A. Mengambil Daftar Infrastruktur (Termasuk diameter pipa)
-app.get('/api/web/nodes', authenticateAndAuthorize('Teknisi'), async (req, res) => {
+app.get('/api/web/nodes', authenticateAndAuthorize(), async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('nodes')
@@ -161,6 +161,33 @@ app.get('/api/web/telemetry/:nodeId', authenticateAndAuthorize('Teknisi'), async
         }));
 
         res.status(200).json({ success: true, data: formattedData });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Mengambil Semua Data Telemetri (Untuk Grafik Global di Executive Dashboard)
+app.get('/api/web/telemetry-all', authenticateAndAuthorize(), async (req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('telemetry_data')
+            .select('node_id, flow_rate_lpm, recorded_at')
+            .order('recorded_at', { ascending: true })
+            .limit(200); // Ambil sampel data terbaru
+
+        if (error) throw error;
+
+        // Kelompokkan data berdasarkan waktu (jam:menit)
+        const groupedData = data.reduce((acc, log) => {
+            const time = new Date(log.recorded_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            if (!acc[time]) acc[time] = { time };
+            
+            // Simpan debit tiap node pada detik tersebut
+            acc[time][log.node_id] = parseFloat(log.flow_rate_lpm);
+            return acc;
+        }, {});
+
+        res.status(200).json({ success: true, data: Object.values(groupedData) });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -199,7 +226,7 @@ app.put('/api/web/resolve/:anomalyId', authenticateAndAuthorize('Teknisi'), asyn
 });
 
 // D. Halaman Audit / Log Riwayat
-app.get('/api/web/logs', authenticateAndAuthorize('Teknisi'), async (req, res) => {
+app.get('/api/web/logs', authenticateAndAuthorize(), async (req, res) => {
     try {
         // Melakukan JOIN antara anomalies, incident_logs, dan nodes
         const { data, error } = await supabase
