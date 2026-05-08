@@ -1,0 +1,14 @@
+{
+  "records": [
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:00:00Z", "flow_rate_lpm": 7},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:01:00Z", "flow_rate_lpm": 8},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:02:00Z", "flow_rate_lpm": 9},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:03:00Z", "flow_rate_lpm": 8},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:04:00Z", "flow_rate_lpm": 7},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:05:00Z", "flow_rate_lpm": 9},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:06:00Z", "flow_rate_lpm": 8},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:07:00Z", "flow_rate_lpm": 7},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:08:00Z", "flow_rate_lpm": 34},
+    {"node_id": "node-1", "recorded_at": "2026-05-08T10:09:00Z", "flow_rate_lpm": 10}
+  ]
+}
