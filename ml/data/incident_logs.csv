@@ -1,0 +1,4 @@
+log_id,anomaly_id,user_id,action_description,action_timestamp
+d2b2a926-559d-45bc-9c2a-f1a542d12158,1085c8f4-5178-455e-a2a7-1b1b3d6df16b,aaa94071-a6f9-42ea-8d49-a0cc6e79a771,Reset perangkat and konfirmasi flow normal,2026-05-06 12:08:00+00:00
+c6c5b0fa-0807-4f55-b419-c252bb18eb83,9ac122b0-4bfa-434d-b06b-06696364bac5,aaa94071-a6f9-42ea-8d49-a0cc6e79a771,"Telah mengecek pipa, tidak ada kebocoran",2026-05-01 21:21:00+00:00
+a28b0220-e4f0-4c0d-98ef-75569239a076,e7edcc88-2463-43b2-9182-93c8f926e4e6,aaa94071-a6f9-42ea-8d49-a0cc6e79a771,Telah mengecek nilai dan menutup titik kebocoran,2026-05-08 08:04:00+00:00
