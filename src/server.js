@@ -54,17 +54,24 @@ const authenticateAndAuthorize = (requiredRole = null) => async (req, res, next)
 };
 
 // ============================================================================
-// 1. RUTE IOT (EDGE LAYER) - Menggunakan skema D3
+// 1. RUTE IOT (EDGE LAYER)
 // ============================================================================
 app.post('/api/iot/telemetry', async (req, res) => {
-    // Menyesuaikan dengan nama kolom D3
     const { node_id, flow_rate_lpm } = req.body; 
 
+    // TAMBAHAN: Log agar terlihat di terminal Node.js
+    console.log(`[IoT IN] Node: ${node_id.substring(0,8)} | Debit: ${flow_rate_lpm} L/m`);
+
     try {
-        // A. Simpan data ke telemetry_data
-        await supabase
+        // A. Simpan data ke telemetry_data (Dengan Pengecekan Error)
+        const { error: insertError } = await supabase
             .from('telemetry_data')
             .insert([{ node_id, flow_rate_lpm }]);
+            
+        if (insertError) {
+            console.error("[DB ERROR] Gagal simpan ke Supabase:", insertError.message);
+            return res.status(500).json({ success: false, error: insertError.message });
+        }
 
         // B. Perbarui status is_online di tabel nodes
         await supabase
@@ -72,24 +79,9 @@ app.post('/api/iot/telemetry', async (req, res) => {
             .update({ is_online: true, last_sync: new Date() })
             .eq('node_id', node_id);
 
-        // C. [SIMULASI AI] Jika flow_rate mencurigakan, catat ke tabel anomalies
-        // Di sistem nyata, ini dipicu oleh FastAPI Python
-        if (flow_rate_lpm > 15) { 
-            await supabase
-                .from('anomalies')
-                .insert([{ 
-                    node_id, 
-                    start_time: new Date(), 
-                    ai_score: 0.95, 
-                    is_resolved: false 
-                }]);
-            
-            // Note: Di sini Web Push Notification akan dipicu untuk Pengelola
-        }
-
         res.status(200).json({ success: true, message: "Telemetri dicatat." });
     } catch (error) {
-        console.error("Error IoT:", error);
+        console.error("Error Sistem IoT:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
