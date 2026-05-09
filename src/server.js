@@ -2,19 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('../swagger.json');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Inisialisasi Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// ============================================================================
-// MIDDLEWARE: Autentikasi & RBAC (Role-Based Access Control)
-// ============================================================================
 const authenticateAndAuthorize = (requiredRole = null) => async (req, res, next) => {
     const authHeader = req.headers.authorization;
     
@@ -25,11 +24,9 @@ const authenticateAndAuthorize = (requiredRole = null) => async (req, res, next)
     const token = authHeader.split(' ')[1];
 
     try {
-        // 1. Validasi token JWT ke Supabase Auth
         const { data: { user }, error: authError } = await supabase.auth.getUser(token);
         if (authError || !user) throw authError;
 
-        // 2. Ambil peran (role) dari tabel users (Skema 5 Tabel)
         const { data: userProfile, error: profileError } = await supabase
             .from('users')
             .select('role')
@@ -40,12 +37,10 @@ const authenticateAndAuthorize = (requiredRole = null) => async (req, res, next)
             return res.status(403).json({ success: false, error: "Profil pengguna tidak ditemukan." });
         }
 
-        // 3. Cek apakah role sesuai dengan yang diminta (jika ada batasan)
         if (requiredRole && userProfile.role !== requiredRole) {
             return res.status(403).json({ success: false, error: `Akses ditolak: Membutuhkan peran ${requiredRole}.` });
         }
 
-        // 4. Simpan data user & role ke dalam request untuk dipakai di rute
         req.user = { id: user.id, email: user.email, role: userProfile.role };
         next();
     } catch (error) {
@@ -53,17 +48,12 @@ const authenticateAndAuthorize = (requiredRole = null) => async (req, res, next)
     }
 };
 
-// ============================================================================
-// 1. RUTE IOT (EDGE LAYER)
-// ============================================================================
 app.post('/api/iot/telemetry', async (req, res) => {
     const { node_id, flow_rate_lpm } = req.body; 
 
-    // TAMBAHAN: Log agar terlihat di terminal Node.js
     console.log(`[IoT IN] Node: ${node_id.substring(0,8)} | Debit: ${flow_rate_lpm} L/m`);
 
     try {
-        // A. Simpan data ke telemetry_data (Dengan Pengecekan Error)
         const { error: insertError } = await supabase
             .from('telemetry_data')
             .insert([{ node_id, flow_rate_lpm }]);
@@ -73,7 +63,6 @@ app.post('/api/iot/telemetry', async (req, res) => {
             return res.status(500).json({ success: false, error: insertError.message });
         }
 
-        // B. Perbarui status is_online di tabel nodes
         await supabase
             .from('nodes')
             .update({ is_online: true, last_sync: new Date() })
@@ -86,18 +75,13 @@ app.post('/api/iot/telemetry', async (req, res) => {
     }
 });
 
-// ============================================================================
-// 2. RUTE WEBSITE - PENGELOLA (Executive View / Pengganti Mobile App)
-// ============================================================================
 app.get('/api/web/executive/summary', authenticateAndAuthorize('Pengelola'), async (req, res) => {
     try {
-        // Hitung total anomali yang belum diselesaikan
         const { data: activeAnomalies } = await supabase
             .from('anomalies')
             .select('anomaly_id')
             .eq('is_resolved', false);
 
-        // Hitung status infrastruktur
         const { data: nodes } = await supabase.from('nodes').select('node_id, is_online');
         const activeNodesCount = nodes.filter(n => n.is_online).length;
 
@@ -115,11 +99,6 @@ app.get('/api/web/executive/summary', authenticateAndAuthorize('Pengelola'), asy
     }
 });
 
-// ============================================================================
-// 3. RUTE WEBSITE - TEKNISI (Detailed View)
-// ============================================================================
-
-// A. Mengambil Daftar Infrastruktur (Termasuk diameter pipa)
 app.get('/api/web/nodes', authenticateAndAuthorize(), async (req, res) => {
     try {
         const { data, error } = await supabase
@@ -134,7 +113,6 @@ app.get('/api/web/nodes', authenticateAndAuthorize(), async (req, res) => {
     }
 });
 
-// B. Mengambil Grafik Telemetri 
 app.get('/api/web/telemetry/:nodeId', authenticateAndAuthorize('Teknisi'), async (req, res) => {
     const { nodeId } = req.params;
     try {
@@ -158,23 +136,20 @@ app.get('/api/web/telemetry/:nodeId', authenticateAndAuthorize('Teknisi'), async
     }
 });
 
-// Mengambil Semua Data Telemetri (Untuk Grafik Global di Executive Dashboard)
 app.get('/api/web/telemetry-all', authenticateAndAuthorize(), async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('telemetry_data')
             .select('node_id, flow_rate_lpm, recorded_at')
             .order('recorded_at', { ascending: true })
-            .limit(200); // Ambil sampel data terbaru
+            .limit(200);
 
         if (error) throw error;
 
-        // Kelompokkan data berdasarkan waktu (jam:menit)
         const groupedData = data.reduce((acc, log) => {
             const time = new Date(log.recorded_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
             if (!acc[time]) acc[time] = { time };
             
-            // Simpan debit tiap node pada detik tersebut
             acc[time][log.node_id] = parseFloat(log.flow_rate_lpm);
             return acc;
         }, {});
@@ -185,13 +160,11 @@ app.get('/api/web/telemetry-all', authenticateAndAuthorize(), async (req, res) =
     }
 });
 
-// C. Alur Resolusi Insiden (Mencatat ke incident_logs)
 app.put('/api/web/resolve/:anomalyId', authenticateAndAuthorize('Teknisi'), async (req, res) => {
     const { anomalyId } = req.params;
-    const { action_description } = req.body; // Catatan teknisi dari form frontend
+    const { action_description } = req.body;
     
     try {
-        // 1. Ubah status anomali menjadi terselesaikan
         const { error: updateAnomalyError } = await supabase
             .from('anomalies')
             .update({ is_resolved: true, end_time: new Date() })
@@ -199,12 +172,11 @@ app.put('/api/web/resolve/:anomalyId', authenticateAndAuthorize('Teknisi'), asyn
         
         if (updateAnomalyError) throw updateAnomalyError;
 
-        // 2. Catat siapa teknisi yang membetulkan ke tabel incident_logs
         const { error: insertLogError } = await supabase
             .from('incident_logs')
             .insert([{
                 anomaly_id: anomalyId,
-                user_id: req.user.id, // Diambil otomatis dari token JWT
+                user_id: req.user.id,
                 action_description: action_description || "Perbaikan fisik selesai dilakukan.",
                 action_timestamp: new Date()
             }]);
@@ -217,10 +189,8 @@ app.put('/api/web/resolve/:anomalyId', authenticateAndAuthorize('Teknisi'), asyn
     }
 });
 
-// D. Halaman Audit / Log Riwayat
 app.get('/api/web/logs', authenticateAndAuthorize(), async (req, res) => {
     try {
-        // Melakukan JOIN antara anomalies, incident_logs, dan nodes
         const { data, error } = await supabase
             .from('anomalies')
             .select(`
@@ -237,9 +207,6 @@ app.get('/api/web/logs', authenticateAndAuthorize(), async (req, res) => {
     }
 });
 
-// ============================================================================
-// JALANKAN SERVER 
-// ============================================================================
 const PORT = process.env.PORT || 5000; 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Web Service aktif di port ${PORT}`);
