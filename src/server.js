@@ -49,14 +49,16 @@ const authenticateAndAuthorize = (requiredRole = null) => async (req, res, next)
 };
 
 app.post('/api/iot/telemetry', async (req, res) => {
-    const { node_id, flow_rate_lpm } = req.body; 
+    const { node_id, flow_rate_lpm, recorded_at } = req.body;
 
-    console.log(`[IoT IN] Node: ${node_id.substring(0,8)} | Debit: ${flow_rate_lpm} L/m`);
+    const final_time = recorded_at || new Date().toISOString();
+
+    console.log(`[IoT IN] Node: ${node_id.substring(0,8)} | Debit: ${flow_rate_lpm} L/m | Waktu: ${final_time}`);
 
     try {
         const { error: insertError } = await supabase
             .from('telemetry_data')
-            .insert([{ node_id, flow_rate_lpm }]);
+            .insert([{ node_id, flow_rate_lpm, recorded_at: final_time }]);
             
         if (insertError) {
             console.error("[DB ERROR] Gagal simpan ke Supabase:", insertError.message);
@@ -125,10 +127,19 @@ app.get('/api/web/telemetry/:nodeId', authenticateAndAuthorize('Teknisi'), async
 
         if (error) throw error;
 
-        const formattedData = data.map(log => ({
-            timeISO: new Date(log.recorded_at).toISOString(), 
-            debit: parseFloat(log.flow_rate_lpm)
-        }));
+        const formattedData = data.map(log => {
+            const timeLocal = new Date(log.recorded_at).toLocaleTimeString('id-ID', { 
+                timeZone: 'Asia/Jakarta',
+                hour: '2-digit', 
+                minute: '2-digit',
+                second: '2-digit'
+            });
+
+            return {
+                timeISO: timeLocal, 
+                debit: parseFloat(log.flow_rate_lpm)
+            };
+        });
 
         res.status(200).json({ success: true, data: formattedData });
     } catch (error) {
@@ -147,7 +158,12 @@ app.get('/api/web/telemetry-all', authenticateAndAuthorize(), async (req, res) =
         if (error) throw error;
 
         const groupedData = data.reduce((acc, log) => {
-            const time = new Date(log.recorded_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const time = new Date(log.recorded_at).toLocaleTimeString('id-ID', { 
+                timeZone: 'Asia/Jakarta', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+
             if (!acc[time]) acc[time] = { time };
             
             acc[time][log.node_id] = parseFloat(log.flow_rate_lpm);

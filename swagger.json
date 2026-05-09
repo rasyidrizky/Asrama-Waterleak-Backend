@@ -34,6 +34,9 @@
                 },
                 "flow_rate_lpm": {
                   "example": "any"
+                },
+                "recorded_at": {
+                  "example": "any"
                 }
               }
             }
