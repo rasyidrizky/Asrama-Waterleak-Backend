@@ -103,13 +103,31 @@ app.get('/api/web/executive/summary', authenticateAndAuthorize('Pengelola'), asy
 
 app.get('/api/web/nodes', authenticateAndAuthorize(), async (req, res) => {
     try {
-        const { data, error } = await supabase
+        const { data: nodes, error: nodesError } = await supabase
             .from('nodes')
             .select('*')
             .order('location_block', { ascending: true });
             
-        if (error) throw error;
-        res.status(200).json({ success: true, data });
+        if (nodesError) throw nodesError;
+
+        const { data: activeAnomalies, error: anomaliesError } = await supabase
+            .from('anomalies')
+            .select('anomaly_id, node_id')
+            .eq('is_resolved', false);
+
+        if (anomaliesError) throw anomaliesError;
+
+        const formattedNodes = nodes.map(node => {
+            const currentAnomaly = activeAnomalies.find(a => a.node_id === node.node_id);
+            
+            return {
+                ...node,
+                has_anomaly: !!currentAnomaly,
+                anomaly_id: currentAnomaly ? currentAnomaly.anomaly_id : null
+            };
+        });
+
+        res.status(200).json({ success: true, data: formattedNodes });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -181,6 +199,12 @@ app.put('/api/web/resolve/:anomalyId', authenticateAndAuthorize('Teknisi'), asyn
     const { action_description } = req.body;
     
     try {
+        const { data: anomalyInfo } = await supabase
+            .from('anomalies')
+            .select('node_id')
+            .eq('anomaly_id', anomalyId)
+            .single();
+
         const { error: updateAnomalyError } = await supabase
             .from('anomalies')
             .update({ is_resolved: true, end_time: new Date() })
@@ -198,6 +222,13 @@ app.put('/api/web/resolve/:anomalyId', authenticateAndAuthorize('Teknisi'), asyn
             }]);
 
         if (insertLogError) throw insertLogError;
+
+        if (anomalyInfo) {
+            await supabase
+                .from('nodes')
+                .update({ status: 'NORMAL', has_anomaly: false })
+                .eq('node_id', anomalyInfo.node_id);
+        }
 
         res.status(200).json({ success: true, message: "Insiden berhasil diselesaikan dan dicatat dalam log audit." });
     } catch (error) {

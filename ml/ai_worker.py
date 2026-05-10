@@ -100,11 +100,13 @@ if __name__ == "__main__":
                 anomaly_score = model.decision_function(features)[0]
 
                 if prediction == -1:
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] BAHAYA! Debit anomali terdeteksi: {latest_flow} L/m")
+                    
                     report_anomaly(df.iloc[0]['node_id'], anomaly_score)
                 else:
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Aman. Debit saat ini: {latest_flow} L/m")
                     
-            except Exception as ve:
-                print(f"Kesalahan saat memprediksi: {ve}")
+            except Exception as e:
+                print(f"Kesalahan saat memprediksi: {e}")
                 
         time.sleep(5)
